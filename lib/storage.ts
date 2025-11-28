@@ -1,9 +1,29 @@
 import { supabase, DbChatSession, DbMessage } from './supabase';
 
+export interface FunctionCall {
+  name: string;
+  args: Record<string, any>;
+}
+
+export interface FunctionResult {
+  name: string;
+  response: any;
+  error?: string;
+}
+
+export interface MessageImage {
+  url: string;
+  alt?: string;
+  mimeType?: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  images?: MessageImage[];
+  functionCalls?: FunctionCall[];
+  functionResults?: FunctionResult[];
 }
 
 export interface ChatSession {
@@ -183,20 +203,42 @@ export const storage = {
       }
 
       // 기존 메시지 삭제 후 재삽입 (간단한 동기화)
-      await supabase.from('messages').delete().eq('session_id', session.id);
+      const { error: deleteError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('session_id', session.id);
+
+      if (deleteError) {
+        console.error('Failed to delete existing messages:', {
+          error: deleteError,
+          code: deleteError.code,
+          message: deleteError.message,
+          details: deleteError.details,
+          sessionId: session.id,
+        });
+      }
 
       if (session.messages.length > 0) {
-        const { error: messagesError } = await supabase.from('messages').insert(
-          session.messages.map((m) => ({
-            id: m.id,
-            session_id: session.id,
-            role: m.role,
-            content: m.content,
-          }))
-        );
+        const messagesToInsert = session.messages.map((m) => ({
+          id: m.id,
+          session_id: session.id,
+          role: m.role,
+          content: m.content,
+        }));
+        
+        const { error: messagesError } = await supabase
+          .from('messages')
+          .insert(messagesToInsert);
 
         if (messagesError) {
-          console.error('Failed to save messages:', messagesError);
+          console.error('Failed to save messages:', {
+            error: messagesError,
+            code: messagesError.code,
+            message: messagesError.message,
+            details: messagesError.details,
+            hint: messagesError.hint,
+            messagesCount: messagesToInsert.length,
+          });
         }
       }
     } catch (error) {

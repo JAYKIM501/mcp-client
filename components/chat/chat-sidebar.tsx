@@ -4,8 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { format, isToday, isYesterday, subDays, isAfter } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { storage, ChatSession } from '@/lib/storage';
-import { PanelLeftClose, PanelLeftOpen, Plus, Trash2, History, MessageSquare, Sparkles, Code, BookOpen, Lightbulb, HelpCircle, Zap, Database, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Plus, Trash2, History, MessageSquare, Sparkles, Code, BookOpen, Lightbulb, HelpCircle, Zap, Database, ChevronDown, ChevronRight, Loader2, Server, Wifi, WifiOff, Settings } from 'lucide-react';
 import { loadDemoDataAsync } from '@/lib/demo-data';
+import { useMCP, getStoredServers } from '@/lib/mcp-context';
+import { ServerConfig } from '@/lib/mcp-manager';
+import Link from 'next/link';
 
 interface ChatSidebarProps {
   currentSessionId: string | null;
@@ -25,6 +28,10 @@ export function ChatSidebar({
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['오늘']));
   const [isLoading, setIsLoading] = useState(true);
+  const [isMCPExpanded, setIsMCPExpanded] = useState(true);
+  const [storedServers, setStoredServers] = useState<ServerConfig[]>([]);
+
+  const { connectedServers, isLoading: isMCPLoading, refresh } = useMCP();
 
   const loadSessions = useCallback(async () => {
     try {
@@ -43,6 +50,47 @@ export function ChatSidebar({
     const interval = setInterval(loadSessions, 3000);
     return () => clearInterval(interval);
   }, [loadSessions]);
+
+  // MCP 서버 설정 로드 및 상태 동기화
+  useEffect(() => {
+    const loadStoredServers = async () => {
+      try {
+        const servers = await getStoredServers();
+        setStoredServers(servers);
+      } catch (error) {
+        console.error('Failed to load stored servers:', error);
+      }
+    };
+    
+    const handleMCPStatusChange = async () => {
+      // 서버 목록과 연결 상태 모두 새로고침
+      await loadStoredServers();
+      // MCP 컨텍스트의 연결 상태도 새로고침
+      if (refresh) {
+        await refresh();
+      }
+    };
+    
+    loadStoredServers();
+    
+    // MCP 상태 변경 이벤트 리스너
+    window.addEventListener('mcp-status-changed', handleMCPStatusChange);
+    
+    // 페이지 포커스 시 상태 새로고침
+    const handleFocus = () => {
+      handleMCPStatusChange();
+    };
+    window.addEventListener('focus', handleFocus);
+    
+    // 주기적으로 상태 확인 (5초마다)
+    const interval = setInterval(handleMCPStatusChange, 5000);
+    
+    return () => {
+      window.removeEventListener('mcp-status-changed', handleMCPStatusChange);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [refresh]);
 
   // session-changed 이벤트 리스너
   useEffect(() => {
@@ -160,6 +208,17 @@ export function ChatSidebar({
         >
           <Plus size={20} />
         </button>
+        {/* MCP 서버 상태 요약 */}
+        <div className="mt-2 relative" title={`MCP 서버: ${connectedServers.length}/${storedServers.length} 연결됨`}>
+          <Link href="/mcp" className="p-2 hover:bg-muted rounded-lg transition-colors block">
+            <Server size={20} className={connectedServers.length > 0 ? 'text-green-500' : 'text-muted-foreground'} />
+          </Link>
+          {connectedServers.length > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 bg-green-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-medium">
+              {connectedServers.length}
+            </span>
+          )}
+        </div>
       </div>
     );
   }
@@ -201,6 +260,105 @@ export function ChatSidebar({
             <PanelLeftClose size={16} />
           </button>
         </div>
+      </div>
+
+      {/* MCP 서버 상태 */}
+      <div className="border-b border-border">
+        <button
+          onClick={() => setIsMCPExpanded(!isMCPExpanded)}
+          className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-muted/50 transition-colors bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30"
+        >
+          <div className="flex items-center gap-2">
+            {isMCPExpanded ? (
+              <ChevronDown size={14} className="text-violet-500" />
+            ) : (
+              <ChevronRight size={14} className="text-violet-500" />
+            )}
+            <Server size={14} className="text-violet-500" />
+            <span className="text-xs font-semibold text-foreground">MCP 서버</span>
+            <span className="text-xs text-muted-foreground">
+              ({connectedServers.length}/{storedServers.length})
+            </span>
+          </div>
+          {isMCPLoading && (
+            <Loader2 size={14} className="animate-spin text-muted-foreground" />
+          )}
+        </button>
+
+        {isMCPExpanded && (
+          <div className="px-2 py-2 space-y-1.5 bg-gray-50/50 dark:bg-gray-950/50">
+            {storedServers.length === 0 ? (
+              <div className="px-2 py-3 text-center">
+                <p className="text-xs text-muted-foreground mb-2">등록된 서버가 없습니다</p>
+                <Link
+                  href="/mcp"
+                  className="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                >
+                  <Settings size={12} />
+                  서버 추가하기
+                </Link>
+              </div>
+            ) : (
+              <>
+                {storedServers.map((server) => {
+                  const isConnected = connectedServers.some((s) => s.id === server.id);
+                  return (
+                    <div
+                      key={server.id}
+                      className={`px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors ${
+                        isConnected
+                          ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800'
+                          : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {isConnected ? (
+                          <Wifi size={12} className="text-green-500 flex-shrink-0" />
+                        ) : (
+                          <WifiOff size={12} className="text-gray-400 flex-shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-medium truncate" title={server.name}>
+                            {server.name}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground uppercase">
+                            {server.transport}
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 ${
+                          isConnected
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                        }`}
+                      >
+                        {isConnected ? (
+                          <>
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                            연결됨
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                            연결 안됨
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <Link
+                  href="/mcp"
+                  className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 rounded-lg transition-colors"
+                >
+                  <Settings size={12} />
+                  서버 관리
+                </Link>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 세션 목록 */}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ServerConfig } from '@/lib/mcp-manager';
-import { X, Save, Server, Globe, Terminal } from 'lucide-react';
+import { X, Save, Server, Globe, Terminal, Key } from 'lucide-react';
 
 interface ServerConfigFormProps {
   server?: ServerConfig;
@@ -18,6 +18,8 @@ export function ServerConfigForm({ server, onSave, onCancel }: ServerConfigFormP
   const [command, setCommand] = useState(server?.command || '');
   const [args, setArgs] = useState(server?.args?.join(' ') || '');
   const [url, setUrl] = useState(server?.url || '');
+  const [authToken, setAuthToken] = useState(server?.authToken || '');
+  const [authHeader, setAuthHeader] = useState(server?.authHeader || 'Authorization');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +34,10 @@ export function ServerConfigForm({ server, onSave, onCancel }: ServerConfigFormP
       }),
       ...((transport === 'sse' || transport === 'streamable-http') && {
         url: url.trim(),
+        ...(authToken.trim() && {
+          authToken: authToken.trim(),
+          authHeader: authHeader.trim() || 'Authorization',
+        }),
       }),
     };
 
@@ -101,17 +107,50 @@ export function ServerConfigForm({ server, onSave, onCancel }: ServerConfigFormP
       )}
 
       {(transport === 'sse' || transport === 'streamable-http') && (
-        <div>
-          <label className="block text-sm font-medium mb-1">URL</label>
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="예: http://localhost:3000/mcp"
-          />
-        </div>
+        <>
+          <div>
+            <label className="block text-sm font-medium mb-1">URL</label>
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="예: http://localhost:3000/mcp"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+              <Key size={14} />
+              인증 토큰 (선택사항)
+            </label>
+            <input
+              type="password"
+              value={authToken}
+              onChange={(e) => setAuthToken(e.target.value)}
+              className="w-full px-3 py-2 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Bearer token 또는 API key"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              인증이 필요한 서버의 경우 토큰을 입력하세요
+            </p>
+          </div>
+          {authToken && (
+            <div>
+              <label className="block text-sm font-medium mb-1">인증 헤더 이름</label>
+              <input
+                type="text"
+                value={authHeader}
+                onChange={(e) => setAuthHeader(e.target.value)}
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Authorization"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                기본값: Authorization (Bearer token의 경우 &quot;Bearer {'{token}'}&quot; 형식으로 자동 추가)
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       <div className="flex gap-2 justify-end">

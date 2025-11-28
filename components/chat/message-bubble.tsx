@@ -1,16 +1,145 @@
 'use client';
 
-import React, { memo, useState } from 'react';
+import React, { memo, useState, Children } from 'react';
 import Markdown from 'markdown-to-jsx';
 import { CodeBlock } from '@/components/ui/code-block';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ZoomIn, X, Download, ExternalLink } from 'lucide-react';
+import { FunctionCallViewer } from './function-call-viewer';
+import { FunctionCall, FunctionResult, MessageImage } from '@/lib/storage';
+import Image from 'next/image';
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
   content: string;
+  images?: MessageImage[];
+  functionCalls?: FunctionCall[];
+  functionResults?: FunctionResult[];
 }
 
-const MessageBubble = memo(({ role, content }: MessageBubbleProps) => {
+// 이미지 뷰어 컴포넌트
+function ImageViewer({ 
+  src, 
+  alt, 
+  onClose 
+}: { 
+  src: string; 
+  alt: string; 
+  onClose: () => void;
+}) {
+  return (
+    <div 
+      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="relative max-w-[90vw] max-h-[90vh]">
+        <button
+          onClick={onClose}
+          className="absolute -top-10 right-0 p-2 text-white hover:bg-white/20 rounded-full transition-colors"
+        >
+          <X size={24} />
+        </button>
+        <img
+          src={src}
+          alt={alt}
+          className="max-w-full max-h-[85vh] object-contain rounded-lg"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex gap-2">
+          <a
+            href={src}
+            download
+            onClick={(e) => e.stopPropagation()}
+            className="p-2 text-white hover:bg-white/20 rounded-full transition-colors"
+            title="다운로드"
+          >
+            <Download size={20} />
+          </a>
+          <a
+            href={src}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="p-2 text-white hover:bg-white/20 rounded-full transition-colors"
+            title="새 탭에서 열기"
+          >
+            <ExternalLink size={20} />
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 채팅 이미지 컴포넌트 (인라인 블록으로 변경하여 p 태그 안에 들어갈 수 있도록)
+function ChatImage({ src, alt, inline = false }: { src: string; alt: string; inline?: boolean }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const ImageContent = () => (
+    <>
+      {isLoading && (
+        <span className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse">
+          <span className="text-xs text-muted-foreground">로딩 중...</span>
+        </span>
+      )}
+      {error ? (
+        <span className="inline-flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+          <X size={16} />
+          이미지를 불러올 수 없습니다
+        </span>
+      ) : (
+        <>
+          <img
+            src={src}
+            alt={alt}
+            className={`max-w-full max-h-80 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm transition-transform hover:scale-[1.02] ${isLoading ? 'invisible' : 'visible'}`}
+            onLoad={() => setIsLoading(false)}
+            onError={() => {
+              setIsLoading(false);
+              setError(true);
+            }}
+            onClick={() => setIsOpen(true)}
+          />
+          <span 
+            className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none"
+            onClick={() => setIsOpen(true)}
+          >
+            <ZoomIn size={24} className="text-white" />
+          </span>
+        </>
+      )}
+    </>
+  );
+
+  if (inline) {
+    // 인라인 모드: span 사용 (p 태그 안에 들어갈 수 있음)
+    return (
+      <>
+        <span className="relative inline-block my-2 group cursor-pointer">
+          <ImageContent />
+        </span>
+        {isOpen && (
+          <ImageViewer src={src} alt={alt} onClose={() => setIsOpen(false)} />
+        )}
+      </>
+    );
+  }
+
+  // 블록 모드: div 사용
+  return (
+    <>
+      <div className="relative inline-block my-2 group cursor-pointer">
+        <ImageContent />
+      </div>
+      {isOpen && (
+        <ImageViewer src={src} alt={alt} onClose={() => setIsOpen(false)} />
+      )}
+    </>
+  );
+}
+
+const MessageBubble = memo(({ role, content, images, functionCalls, functionResults }: MessageBubbleProps) => {
   const [isCopied, setIsCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -54,9 +183,34 @@ const MessageBubble = memo(({ role, content }: MessageBubbleProps) => {
         </button>
 
         {role === 'user' ? (
-          <div className="whitespace-pre-wrap break-words pr-8">{content}</div>
+          <div className="whitespace-pre-wrap break-words pr-8">
+            {content}
+            {/* 사용자 메시지의 이미지 표시 */}
+            {images && images.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {images.map((img, idx) => (
+                  <ChatImage key={idx} src={img.url} alt={img.alt || `이미지 ${idx + 1}`} />
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="pr-8">
+            {/* Function Calling 시각화 */}
+            {(functionCalls && functionCalls.length > 0) && (
+              <FunctionCallViewer
+                functionCalls={functionCalls}
+                functionResults={functionResults}
+              />
+            )}
+            {/* AI 응답의 이미지 (별도 배열) */}
+            {images && images.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {images.map((img, idx) => (
+                  <ChatImage key={idx} src={img.url} alt={img.alt || `이미지 ${idx + 1}`} />
+                ))}
+              </div>
+            )}
             <Markdown
               options={{
                 overrides: {
@@ -96,6 +250,32 @@ const MessageBubble = memo(({ role, content }: MessageBubbleProps) => {
                       </a>
                     ),
                   },
+                  img: {
+                    component: ({ src, alt, ...props }: any) => (
+                      <ChatImage src={src} alt={alt || '이미지'} inline={true} />
+                    ),
+                  },
+                  p: {
+                    component: ({ children, ...props }: any) => {
+                      // 이미지가 포함된 경우 div로 렌더링 (p 태그 안에 div가 들어갈 수 없음)
+                      const hasImage = Children.toArray(children).some(
+                        (child: any) => {
+                          if (typeof child === 'object' && child !== null) {
+                            return child.type?.name === 'ChatImage' || 
+                                   child.props?.src || 
+                                   (child.props?.children && Children.toArray(child.props.children).some((c: any) => c?.props?.src));
+                          }
+                          return false;
+                        }
+                      );
+                      const Tag = hasImage ? 'div' : 'p';
+                      return (
+                        <Tag className="my-2 leading-relaxed last:mb-0" {...props}>
+                          {children}
+                        </Tag>
+                      );
+                    },
+                  },
                   table: {
                     component: ({ children, ...props }: any) => (
                       <div className="overflow-x-auto my-4">
@@ -131,13 +311,6 @@ const MessageBubble = memo(({ role, content }: MessageBubbleProps) => {
                       <ol className="list-decimal list-inside my-2 space-y-1" {...props}>
                         {children}
                       </ol>
-                    ),
-                  },
-                  p: {
-                    component: ({ children, ...props }: any) => (
-                      <p className="my-2 leading-relaxed last:mb-0" {...props}>
-                        {children}
-                      </p>
                     ),
                   },
                 },

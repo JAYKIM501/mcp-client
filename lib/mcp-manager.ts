@@ -14,6 +14,9 @@ export const ServerConfigSchema = z.object({
   args: z.array(z.string()).optional(),
   // HTTP 설정
   url: z.string().url().optional(),
+  // 인증 설정
+  authToken: z.string().optional(),
+  authHeader: z.string().optional(), // 기본값: 'Authorization'
 });
 
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;
@@ -25,11 +28,23 @@ interface ServerConnection {
   connected: boolean;
 }
 
+// Node.js global 객체에 MCP 연결 저장 (핫 리로딩에도 연결 유지)
+const globalForMCP = globalThis as typeof globalThis & {
+  mcpConnections?: Map<string, ServerConnection>;
+};
+
 class MCPManager {
   private static instance: MCPManager;
-  private connections: Map<string, ServerConnection> = new Map();
+  private connections: Map<string, ServerConnection>;
 
-  private constructor() {}
+  private constructor() {
+    // global 객체에서 기존 연결 가져오기 (핫 리로딩 대응)
+    if (!globalForMCP.mcpConnections) {
+      globalForMCP.mcpConnections = new Map();
+    }
+    this.connections = globalForMCP.mcpConnections;
+    console.log('[MCP Manager] Initialized with', this.connections.size, 'existing connections');
+  }
 
   static getInstance(): MCPManager {
     if (!MCPManager.instance) {
@@ -53,6 +68,23 @@ class MCPManager {
       version: '1.0.0',
     });
 
+    // 인증 헤더 준비
+    const needsAuth = config.authToken && (config.transport === 'sse' || config.transport === 'streamable-http');
+    const authHeaderName = config.authHeader || 'Authorization';
+    const authValue = config.authToken && config.authToken.startsWith('Bearer ') 
+      ? config.authToken 
+      : config.authToken 
+      ? `Bearer ${config.authToken}`
+      : undefined;
+    
+    const requestInit: RequestInit | undefined = needsAuth && authValue
+      ? {
+          headers: {
+            [authHeaderName]: authValue,
+          },
+        }
+      : undefined;
+
     let transport: StdioClientTransport | SSEClientTransport | StreamableHTTPClientTransport;
 
     try {
@@ -71,7 +103,12 @@ class MCPManager {
           if (!config.url) {
             throw new Error('URL is required for SSE transport');
           }
-          transport = new SSEClientTransport(new URL(config.url));
+          transport = new SSEClientTransport(new URL(config.url), {
+            requestInit,
+            eventSourceInit: requestInit ? {
+              headers: requestInit.headers as Record<string, string>,
+            } : undefined,
+          });
           break;
 
         case 'streamable-http':
@@ -79,11 +116,18 @@ class MCPManager {
             throw new Error('URL is required for Streamable HTTP transport');
           }
           try {
-            transport = new StreamableHTTPClientTransport(new URL(config.url));
+            transport = new StreamableHTTPClientTransport(new URL(config.url), {
+              requestInit,
+            });
           } catch (error) {
             // Streamable HTTP 실패 시 SSE로 폴백
             console.warn('Streamable HTTP failed, falling back to SSE');
-            transport = new SSEClientTransport(new URL(config.url));
+            transport = new SSEClientTransport(new URL(config.url), {
+              requestInit,
+              eventSourceInit: requestInit ? {
+                headers: requestInit.headers as Record<string, string>,
+              } : undefined,
+            });
           }
           break;
 
@@ -91,14 +135,33 @@ class MCPManager {
           throw new Error(`Unsupported transport type: ${config.transport}`);
       }
 
-      await client.connect(transport);
+      try {
+        console.log('[MCP Manager] Attempting to connect:', {
+          serverId: config.id,
+          transport: config.transport,
+          url: config.url,
+          hasAuth: !!config.authToken,
+          authHeader: authHeaderName,
+        });
+        await client.connect(transport);
+        console.log('[MCP Manager] ✓ Connected successfully');
+      } catch (error: any) {
+        console.error('[MCP Manager] ✗ Connection failed:', {
+          error: error?.message,
+          stack: error?.stack,
+          name: error?.name,
+        });
+        throw error;
+      }
 
-      this.connections.set(config.id, {
+      const connection: ServerConnection = {
         config,
         client,
         transport,
         connected: true,
-      });
+      };
+
+      this.connections.set(config.id, connection);
     } catch (error) {
       // 연결 실패 시 정리
       try {
@@ -134,6 +197,19 @@ class MCPManager {
 
   getConnection(serverId: string): ServerConnection | undefined {
     return this.connections.get(serverId);
+  }
+
+  // MCP Client 객체 가져오기 (mcpToTool에서 사용)
+  getClient(serverId: string): Client | undefined {
+    const connection = this.connections.get(serverId);
+    return connection?.connected ? connection.client : undefined;
+  }
+
+  // 연결된 모든 Client 객체 가져오기 (mcpToTool에서 사용)
+  getConnectedClients(): Client[] {
+    return Array.from(this.connections.values())
+      .filter((conn) => conn.connected)
+      .map((conn) => conn.client);
   }
 
   getConnectedServers(): ServerConfig[] {

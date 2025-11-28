@@ -18,7 +18,10 @@ import {
   Sparkles,
   Keyboard,
   RefreshCw,
+  Zap,
+  ZapOff,
 } from 'lucide-react';
+import { useMCP } from '@/lib/mcp-context';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { MCPStatus } from '@/components/mcp/mcp-status';
 import Link from 'next/link';
@@ -31,8 +34,11 @@ export default function Home() {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [showMigrationBanner, setShowMigrationBanner] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [useMCPTools, setUseMCPTools] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  const { connectedServers } = useMCP();
 
   // 현재 세션 로드
   useEffect(() => {
@@ -191,6 +197,7 @@ export default function Home() {
         body: JSON.stringify({
           message: userMessage.content,
           history,
+          useMCPTools: useMCPTools && connectedServers.length > 0,
         }),
         signal: controller.signal,
       });
@@ -214,6 +221,8 @@ export default function Home() {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: '',
+        functionCalls: [],
+        functionResults: [],
       };
 
       const updatedMessages = [...newMessages, assistantMessage];
@@ -222,6 +231,8 @@ export default function Home() {
 
       let buffer = '';
       let fullContent = '';
+      const functionCalls: any[] = [];
+      const functionResults: any[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -239,6 +250,54 @@ export default function Home() {
             }
             try {
               const parsed = JSON.parse(data);
+              
+              // Function Calling 처리
+              if (parsed.type === 'function_call') {
+                functionCalls.push(parsed.functionCall);
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastMsg = updated[updated.length - 1];
+                  if (lastMsg && lastMsg.role === 'assistant') {
+                    lastMsg.functionCalls = [...functionCalls];
+                  }
+                  return updated;
+                });
+              }
+              
+              // Function 결과 처리
+              if (parsed.type === 'function_result') {
+                functionResults.push({
+                  name: parsed.functionCall.name,
+                  response: parsed.result,
+                });
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastMsg = updated[updated.length - 1];
+                  if (lastMsg && lastMsg.role === 'assistant') {
+                    lastMsg.functionResults = [...functionResults];
+                  }
+                  return updated;
+                });
+              }
+              
+              // Function 오류 처리
+              if (parsed.type === 'function_error') {
+                functionResults.push({
+                  name: parsed.functionCall.name,
+                  response: null,
+                  error: parsed.error,
+                });
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastMsg = updated[updated.length - 1];
+                  if (lastMsg && lastMsg.role === 'assistant') {
+                    lastMsg.functionResults = [...functionResults];
+                  }
+                  return updated;
+                });
+              }
+              
+              // 텍스트 콘텐츠 처리
               if (parsed.text) {
                 fullContent += parsed.text;
                 setMessages((prev) => {
@@ -246,6 +305,8 @@ export default function Home() {
                   const lastMsg = updated[updated.length - 1];
                   if (lastMsg && lastMsg.role === 'assistant') {
                     lastMsg.content = fullContent;
+                    lastMsg.functionCalls = functionCalls.length > 0 ? functionCalls : undefined;
+                    lastMsg.functionResults = functionResults.length > 0 ? functionResults : undefined;
                   }
                   return updated;
                 });
@@ -255,6 +316,22 @@ export default function Home() {
               console.error('Failed to parse SSE data:', error);
             }
           }
+        }
+      }
+      
+      // 최종 메시지 저장 (Function Calling 정보 포함)
+      const finalMessage = {
+        ...assistantMessage,
+        content: fullContent,
+        functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
+        functionResults: functionResults.length > 0 ? functionResults : undefined,
+      };
+      const session = await storage.getSession(sessionId);
+      if (session) {
+        const messageIndex = session.messages.findIndex((m) => m.id === assistantMessage.id);
+        if (messageIndex >= 0) {
+          session.messages[messageIndex] = finalMessage;
+          await storage.saveSession(session);
         }
       }
     } catch (error: unknown) {
@@ -501,6 +578,9 @@ export default function Home() {
                   key={message.id}
                   role={message.role}
                   content={message.content}
+                  images={message.images}
+                  functionCalls={message.functionCalls}
+                  functionResults={message.functionResults}
                 />
               ))
             )}
@@ -518,13 +598,55 @@ export default function Home() {
         {/* 입력 영역 */}
         <footer className="border-t border-border bg-white dark:bg-gray-900 px-4 py-4 shadow-lg">
           <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
+            {/* MCP 도구 토글 및 상태 표시 */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUseMCPTools(!useMCPTools)}
+                  disabled={connectedServers.length === 0}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                    useMCPTools && connectedServers.length > 0
+                      ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
+                  } ${connectedServers.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}`}
+                  title={connectedServers.length === 0 ? 'MCP 서버에 연결하세요' : useMCPTools ? 'MCP 도구 비활성화' : 'MCP 도구 활성화'}
+                >
+                  {useMCPTools && connectedServers.length > 0 ? (
+                    <>
+                      <Zap size={12} className="text-yellow-500" />
+                      <span>MCP 도구 ON</span>
+                    </>
+                  ) : (
+                    <>
+                      <ZapOff size={12} />
+                      <span>MCP 도구 OFF</span>
+                    </>
+                  )}
+                </button>
+                {connectedServers.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    ({connectedServers.length}개 서버 연결됨)
+                  </span>
+                )}
+                {connectedServers.length === 0 && (
+                  <Link
+                    href="/mcp"
+                    className="text-[10px] text-violet-500 hover:underline"
+                  >
+                    서버 연결하기
+                  </Link>
+                )}
+              </div>
+            </div>
+            
             <div className="flex gap-2">
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="메시지를 입력하세요..."
+                placeholder={useMCPTools && connectedServers.length > 0 ? "MCP 도구를 사용하여 질문하세요..." : "메시지를 입력하세요..."}
                 disabled={isLoading}
                 className="flex-1 px-4 py-2 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50 transition-colors"
               />
