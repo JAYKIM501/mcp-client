@@ -41,7 +41,10 @@ export function MCPProvider({ children }: { children: ReactNode }) {
         setConnectedServers(data.servers || []);
       }
     } catch (error) {
-      console.error('Failed to refresh MCP status:', error);
+      // 조용히 실패 처리 (개발 모드에서만 로깅)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to refresh MCP status:', error);
+      }
     }
   }, []);
 
@@ -71,12 +74,16 @@ export function MCPProvider({ children }: { children: ReactNode }) {
         } catch {
           errorMessage = `HTTP ${res.status}: ${res.statusText}`;
         }
-        console.error('Failed to connect:', errorMessage);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to connect:', errorMessage);
+        }
         return { success: false, error: errorMessage };
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '네트워크 오류가 발생했습니다';
-      console.error('Failed to connect:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to connect:', error);
+      }
       return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
@@ -103,12 +110,16 @@ export function MCPProvider({ children }: { children: ReactNode }) {
         } catch {
           errorMessage = `HTTP ${res.status}: ${res.statusText}`;
         }
-        console.error('Failed to disconnect:', errorMessage);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to disconnect:', errorMessage);
+        }
         return { success: false, error: errorMessage };
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '네트워크 오류가 발생했습니다';
-      console.error('Failed to disconnect:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to disconnect:', error);
+      }
       return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
@@ -183,7 +194,9 @@ export async function getStoredServers(): Promise<ServerConfig[]> {
     }
     return [];
   } catch (error) {
-    console.error('Failed to load stored servers:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Failed to load stored servers:', error);
+    }
     return [];
   }
 }
@@ -202,7 +215,9 @@ export async function saveStoredServers(servers: ServerConfig[]): Promise<void> 
       throw new Error(errorData.error || 'Failed to save servers');
     }
   } catch (error) {
-    console.error('Failed to save stored servers:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Failed to save stored servers:', error);
+    }
     throw error;
   }
 }

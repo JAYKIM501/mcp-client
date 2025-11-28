@@ -121,3 +121,38 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* 채팅 화면 배경 패턴 - 심플한 점 패턴 */
+  .chat-pattern-bg {
+    background-color: oklch(0.98 0 0);
+    background-image: 
+      radial-gradient(circle, oklch(0.96 0 0) 0.5px, transparent 0.5px);
+    background-size: 32px 32px;
+    background-position: 0 0;
+  }
+  
+  .dark .chat-pattern-bg {
+    background-color: oklch(0.08 0 0);
+    background-image: 
+      radial-gradient(circle, oklch(0.11 0 0) 0.5px, transparent 0.5px);
+    background-size: 32px 32px;
+  }
+  
+}
+
+/* 모바일에서 Next.js 에러 오버레이가 대화창을 가리지 않도록 */
+@media (max-width: 768px) {
+  /* Next.js 개발 모드 에러 오버레이 버튼 위치 조정 */
+  [data-nextjs-toast],
+  [data-nextjs-dialog],
+  #__next-build-watcher {
+    bottom: 90px !important; /* 입력창 위로 이동 */
+    z-index: 5 !important; /* 입력창보다 낮게 */
+  }
+  
+  /* 에러 오버레이 다이얼로그가 메시지 영역을 가리지 않도록 */
+  [data-nextjs-dialog-overlay] {
+    padding-bottom: 100px !important;
+  }
+}

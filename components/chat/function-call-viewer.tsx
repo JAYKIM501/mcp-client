@@ -1,63 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Loader2, CheckCircle2, XCircle, Code, Zap, Server, Image as ImageIcon, ZoomIn, X, Download, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, CheckCircle2, XCircle, Zap, Server, Image as ImageIcon, ZoomIn, X, Download, ExternalLink } from 'lucide-react';
 import { FunctionCall, FunctionResult } from '@/lib/storage';
 import { CodeBlock } from '@/components/ui/code-block';
-
-// 이미지 뷰어 컴포넌트
-function ImageViewer({ 
-  src, 
-  alt, 
-  onClose 
-}: { 
-  src: string; 
-  alt: string; 
-  onClose: () => void;
-}) {
-  return (
-    <div 
-      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div className="relative max-w-[90vw] max-h-[90vh]">
-        <button
-          onClick={onClose}
-          className="absolute -top-10 right-0 p-2 text-white hover:bg-white/20 rounded-full transition-colors"
-        >
-          <X size={24} />
-        </button>
-        <img
-          src={src}
-          alt={alt}
-          className="max-w-full max-h-[85vh] object-contain rounded-lg"
-          onClick={(e) => e.stopPropagation()}
-        />
-        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex gap-2">
-          <a
-            href={src}
-            download
-            onClick={(e) => e.stopPropagation()}
-            className="p-2 text-white hover:bg-white/20 rounded-full transition-colors"
-            title="다운로드"
-          >
-            <Download size={20} />
-          </a>
-          <a
-            href={src}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="p-2 text-white hover:bg-white/20 rounded-full transition-colors"
-            title="새 탭에서 열기"
-          >
-            <ExternalLink size={20} />
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { ImageViewer } from '@/components/ui/image-viewer';
 
 // 결과에서 이미지 추출
 function extractImagesFromResult(response: any): { images: string[]; otherContent: any } {
@@ -72,9 +19,17 @@ function extractImagesFromResult(response: any): { images: string[]; otherConten
     
     for (const item of response.content) {
       if (item.type === 'image' && item.data) {
-        // Base64 이미지 데이터
-        const mimeType = item.mimeType || 'image/png';
-        images.push(`data:${mimeType};base64,${item.data}`);
+        // URL 형식인지 확인
+        if (item.data.startsWith('http') || item.data.startsWith('/')) {
+          images.push(item.data);
+        } else if (item.data.startsWith('data:')) {
+          // 이미 Data URL 형식인 경우
+          images.push(item.data);
+        } else {
+          // Base64 Raw 데이터인 경우
+          const mimeType = item.mimeType || 'image/png';
+          images.push(`data:${mimeType};base64,${item.data}`);
+        }
       } else if (item.type === 'resource' && item.resource?.blob) {
         // Resource blob 형식
         const mimeType = item.resource.mimeType || 'image/png';
@@ -177,16 +132,39 @@ interface FunctionCallViewerProps {
 }
 
 export function FunctionCallViewer({ functionCalls, functionResults }: FunctionCallViewerProps) {
-  // 기본적으로 모두 펼침
+  // 기본적으로 모두 접힘 상태
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   
-  // 처음 로드 시 모든 항목 펼침
+  // 처음 로드 시 이미지가 포함된 결과만 펼침
   useEffect(() => {
-    if (functionCalls && functionCalls.length > 0) {
-      const allKeys = functionCalls.map((_, index) => `func-${index}`);
-      setExpanded(new Set(allKeys));
+    if (!functionCalls || functionCalls.length === 0 || !functionResults) {
+      return;
     }
-  }, [functionCalls?.length]);
+
+    const keysToExpand = new Set<string>();
+    
+    functionCalls.forEach((_, index) => {
+      const result = functionResults[index];
+      if (result && !result.error) {
+        // 결과에서 이미지 추출
+        const { images } = extractImagesFromResult(result.response);
+        // 이미지가 있으면 펼침
+        if (images && images.length > 0) {
+          keysToExpand.add(`func-${index}`);
+        }
+      }
+    });
+    
+    // 상태가 변경된 경우에만 업데이트 (무한 루프 방지)
+    setExpanded((prev) => {
+      const prevStr = Array.from(prev).sort().join(',');
+      const newStr = Array.from(keysToExpand).sort().join(',');
+      if (prevStr !== newStr) {
+        return keysToExpand;
+      }
+      return prev;
+    });
+  }, [functionCalls, functionResults]);
 
   if (!functionCalls || functionCalls.length === 0) {
     return null;
@@ -274,22 +252,6 @@ export function FunctionCallViewer({ functionCalls, functionResults }: FunctionC
 
             {isExpanded && (
               <div className="px-3 pb-3 pt-2 space-y-3 border-t border-inherit bg-white/50 dark:bg-gray-900/50">
-                {/* 함수 인자 */}
-                {funcCall.args && Object.keys(funcCall.args).length > 0 && (
-                  <div>
-                    <div className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5 uppercase tracking-wide">
-                      <Code size={12} />
-                      매개변수
-                    </div>
-                    <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 overflow-x-auto">
-                      <CodeBlock
-                        language="json"
-                        value={JSON.stringify(funcCall.args, null, 2)}
-                      />
-                    </div>
-                  </div>
-                )}
-
                 {/* 함수 결과 */}
                 {result && (
                   <div>

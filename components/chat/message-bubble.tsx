@@ -3,10 +3,10 @@
 import React, { memo, useState, Children } from 'react';
 import Markdown from 'markdown-to-jsx';
 import { CodeBlock } from '@/components/ui/code-block';
-import { Copy, Check, ZoomIn, X, Download, ExternalLink } from 'lucide-react';
+import { Copy, Check, ZoomIn, X } from 'lucide-react';
 import { FunctionCallViewer } from './function-call-viewer';
 import { FunctionCall, FunctionResult, MessageImage } from '@/lib/storage';
-import Image from 'next/image';
+import { ImageViewer } from '@/components/ui/image-viewer';
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
@@ -14,60 +14,6 @@ interface MessageBubbleProps {
   images?: MessageImage[];
   functionCalls?: FunctionCall[];
   functionResults?: FunctionResult[];
-}
-
-// 이미지 뷰어 컴포넌트
-function ImageViewer({ 
-  src, 
-  alt, 
-  onClose 
-}: { 
-  src: string; 
-  alt: string; 
-  onClose: () => void;
-}) {
-  return (
-    <div 
-      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div className="relative max-w-[90vw] max-h-[90vh]">
-        <button
-          onClick={onClose}
-          className="absolute -top-10 right-0 p-2 text-white hover:bg-white/20 rounded-full transition-colors"
-        >
-          <X size={24} />
-        </button>
-        <img
-          src={src}
-          alt={alt}
-          className="max-w-full max-h-[85vh] object-contain rounded-lg"
-          onClick={(e) => e.stopPropagation()}
-        />
-        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex gap-2">
-          <a
-            href={src}
-            download
-            onClick={(e) => e.stopPropagation()}
-            className="p-2 text-white hover:bg-white/20 rounded-full transition-colors"
-            title="다운로드"
-          >
-            <Download size={20} />
-          </a>
-          <a
-            href={src}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="p-2 text-white hover:bg-white/20 rounded-full transition-colors"
-            title="새 탭에서 열기"
-          >
-            <ExternalLink size={20} />
-          </a>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // 채팅 이미지 컴포넌트 (인라인 블록으로 변경하여 p 태그 안에 들어갈 수 있도록)

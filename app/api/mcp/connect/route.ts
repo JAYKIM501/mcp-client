@@ -12,25 +12,10 @@ export async function POST(request: NextRequest) {
     const actuallyConnected = connectedServers.some(s => s.id === config.id);
     
     if (actuallyConnected) {
-      console.log('[MCP Connect] Server actually connected:', config.name);
       return NextResponse.json({ 
         success: true, 
         message: 'Already connected',
         alreadyConnected: true 
-      });
-    }
-    
-    console.log('[MCP Connect] Server not connected, attempting connection...');
-
-    // 디버깅: 인증 토큰이 있는지 확인
-    if (config.authToken) {
-      console.log('[MCP Connect] Auth token present:', {
-        serverId: config.id,
-        serverName: config.name,
-        transport: config.transport,
-        url: config.url,
-        authHeader: config.authHeader || 'Authorization',
-        tokenPrefix: config.authToken.substring(0, 10) + '...',
       });
     }
 
@@ -40,7 +25,6 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     // "already connected" 에러는 성공으로 처리
     if (error.message?.includes('already connected')) {
-      console.log('[MCP Connect] Server already connected (from error)');
       return NextResponse.json({ 
         success: true, 
         message: 'Already connected',

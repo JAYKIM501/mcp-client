@@ -43,7 +43,6 @@ class MCPManager {
       globalForMCP.mcpConnections = new Map();
     }
     this.connections = globalForMCP.mcpConnections;
-    console.log('[MCP Manager] Initialized with', this.connections.size, 'existing connections');
   }
 
   static getInstance(): MCPManager {
@@ -136,15 +135,7 @@ class MCPManager {
       }
 
       try {
-        console.log('[MCP Manager] Attempting to connect:', {
-          serverId: config.id,
-          transport: config.transport,
-          url: config.url,
-          hasAuth: !!config.authToken,
-          authHeader: authHeaderName,
-        });
         await client.connect(transport);
-        console.log('[MCP Manager] ✓ Connected successfully');
       } catch (error: any) {
         console.error('[MCP Manager] ✗ Connection failed:', {
           error: error?.message,

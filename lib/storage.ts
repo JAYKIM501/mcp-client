@@ -50,6 +50,9 @@ function toAppSession(
       id: m.id,
       role: m.role,
       content: m.content,
+      images: m.images,
+      functionCalls: m.function_calls,
+      functionResults: m.function_results,
     })),
   };
 }
@@ -224,6 +227,9 @@ export const storage = {
           session_id: session.id,
           role: m.role,
           content: m.content,
+          images: m.images,
+          function_calls: m.functionCalls,
+          function_results: m.functionResults,
         }));
         
         const { error: messagesError } = await supabase
@@ -359,6 +365,9 @@ export const storage = {
         session_id: sessionId,
         role: message.role,
         content: message.content,
+        images: message.images,
+        function_calls: message.functionCalls,
+        function_results: message.functionResults,
       });
 
       if (msgError) {
@@ -397,16 +406,7 @@ export const storage = {
 
       const lastMessage = messages[0];
 
-      // 메시지 내용 업데이트
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({ content })
-        .eq('id', lastMessage.id);
-
-      if (updateError) {
-        console.error('Failed to update last message:', updateError);
-        return;
-      }
+      await this.updateMessage(lastMessage.id, { content });
 
       // 세션 updated_at 갱신
       await supabase
@@ -418,6 +418,31 @@ export const storage = {
       await this.autoUpdateTitle(sessionId);
     } catch (error) {
       console.error('Failed to update last message:', error);
+    }
+  },
+
+  // 메시지 업데이트 (범용)
+  async updateMessage(
+    id: string,
+    updates: Partial<Pick<Message, 'content' | 'images' | 'functionCalls' | 'functionResults'>>
+  ): Promise<void> {
+    try {
+      const dbUpdates: any = {};
+      if (updates.content !== undefined) dbUpdates.content = updates.content;
+      if (updates.images !== undefined) dbUpdates.images = updates.images;
+      if (updates.functionCalls !== undefined) dbUpdates.function_calls = updates.functionCalls;
+      if (updates.functionResults !== undefined) dbUpdates.function_results = updates.functionResults;
+
+      const { error } = await supabase
+        .from('messages')
+        .update(dbUpdates)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Failed to update message:', error);
+      }
+    } catch (error) {
+      console.error('Failed to update message:', error);
     }
   },
 

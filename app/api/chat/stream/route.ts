@@ -2,9 +2,54 @@ import { GoogleGenAI, ApiError, Type } from '@google/genai';
 import { NextRequest } from 'next/server';
 import { mcpManager, ServerConfig } from '@/lib/mcp-manager';
 import { mcpStorage } from '@/lib/mcp-storage';
+import { createClient } from '@supabase/supabase-js';
+import { Buffer } from 'buffer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Supabase 클라이언트 생성 (이미지 업로드용)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = (supabaseUrl && supabaseKey) 
+  ? createClient(supabaseUrl, supabaseKey) 
+  : null;
+
+// 이미지 업로드 함수
+async function uploadImageToSupabase(base64Data: string, mimeType: string): Promise<string | null> {
+  if (!supabase) {
+    console.error('Supabase credentials not found');
+    return null;
+  }
+
+  try {
+    // Base64 헤더 제거 및 정리
+    const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '').replace(/\s/g, '');
+    const buffer = Buffer.from(base64Content, 'base64');
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${mimeType.split('/')[1] || 'png'}`;
+
+    const { error } = await supabase.storage
+      .from('chat-images')
+      .upload(fileName, buffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (error) {
+      console.error('Upload error:', error);
+      return null;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('chat-images')
+      .getPublicUrl(fileName);
+
+    return publicUrlData.publicUrl;
+  } catch (error) {
+    console.error('Failed to upload image:', error);
+    return null;
+  }
+}
 
 // 서버 ID와 도구 이름을 안전한 함수 이름으로 변환
 function sanitizeName(name: string): string {
@@ -118,8 +163,6 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-      
-      console.log('[Chat API] MCP Tools available:', functionDeclarations.length);
     }
 
     // 채팅 히스토리 구성
@@ -196,6 +239,37 @@ export async function POST(request: NextRequest) {
                         parsed.toolName,
                         funcCall.args || {}
                       );
+
+                      // 결과에서 이미지 추출 및 업로드 (Supabase Storage)
+                      if (toolResult && !toolResult.isError && toolResult.content) {
+                        // content가 배열인 경우 순회
+                        if (Array.isArray(toolResult.content)) {
+                          for (const item of toolResult.content) {
+                            if (item.type === 'image' && item.data) {
+                              const mimeType = item.mimeType || 'image/png';
+                              const url = await uploadImageToSupabase(item.data, mimeType);
+                              if (url) {
+                                // 데이터를 URL로 교체하고 타입을 유지하거나 변경할 수 있음
+                                // 여기서는 data를 URL로 교체하고 type은 그대로 둠 (클라이언트 뷰어 호환성)
+                                // 또는 텍스트로 변환하여 마크다운 이미지 문법을 넣을 수도 있음
+                                item.data = url;
+                                // item.type = 'image_url'; // 필요 시 변경
+                              }
+                            } else if (item.type === 'resource' && item.resource && item.resource.blob) {
+                               const mimeType = item.resource.mimeType || 'image/png';
+                               const url = await uploadImageToSupabase(item.resource.blob, mimeType);
+                               if (url) {
+                                 // 리소스를 이미지 타입으로 변경하거나 URL 포함
+                                 item.type = 'image';
+                                 item.data = url;
+                                 item.mimeType = mimeType;
+                                 delete item.resource;
+                               }
+                            }
+                          }
+                        }
+                      }
+
                     } else {
                       toolResult = { error: 'Invalid function name format' };
                     }

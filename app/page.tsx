@@ -24,6 +24,7 @@ import {
 import { useMCP } from '@/lib/mcp-context';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { MCPStatus } from '@/components/mcp/mcp-status';
+import { ChatHeader } from '@/components/chat/chat-header';
 import Link from 'next/link';
 
 export default function Home() {
@@ -143,7 +144,9 @@ export default function Home() {
         );
       }
     } catch (error) {
-      console.error('Migration failed:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Migration failed:', error);
+      }
       alert('마이그레이션 중 오류가 발생했습니다.');
     } finally {
       setIsMigrating(false);
@@ -152,9 +155,7 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleSubmit called', { input: input.trim(), isLoading });
     if (!input.trim() || isLoading) {
-      console.log('Early return:', { inputTrimmed: input.trim(), isLoading });
       return;
     }
 
@@ -313,7 +314,9 @@ export default function Home() {
                 await storage.updateLastMessage(sessionId, fullContent);
               }
             } catch (error) {
-              console.error('Failed to parse SSE data:', error);
+              if (process.env.NODE_ENV === 'development') {
+                console.error('Failed to parse SSE data:', error);
+              }
             }
           }
         }
@@ -346,7 +349,9 @@ export default function Home() {
         return;
       }
 
-      console.error('Error:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error:', error);
+      }
       const errorMessage =
         error instanceof Error
           ? error.message
@@ -362,16 +367,20 @@ export default function Home() {
     } finally {
       setIsLoading(false);
       setAbortController(null);
+      // AI 응답 완료 후 입력창에 자동 포커스
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     if (abortController) {
       abortController.abort();
       setAbortController(null);
       setIsLoading(false);
     }
-  };
+  }, [abortController]);
 
   const handleExport = async () => {
     if (!currentSessionId || messages.length === 0) {
@@ -437,7 +446,9 @@ export default function Home() {
         alert('채팅을 성공적으로 가져왔습니다.');
       } catch (error) {
         alert('파일을 읽는 중 오류가 발생했습니다.');
-        console.error(error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error(error);
+        }
       }
     };
     fileInput.click();
@@ -467,7 +478,7 @@ export default function Home() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLoading]);
+  }, [isLoading, handleCancel]);
 
   return (
     <ChatLayout>
@@ -502,57 +513,16 @@ export default function Home() {
         )}
 
         {/* 헤더 */}
-        <header className="border-b border-border bg-white dark:bg-gray-900 px-4 py-3 shadow-sm">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <MessageSquare size={20} />
-                <h1 className="text-xl font-semibold">AI 채팅</h1>
-              </div>
-              <Link
-                href="/mcp"
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Settings size={16} />
-                MCP 관리
-              </Link>
-              <MCPStatus />
-            </div>
-            <div className="flex items-center gap-2">
-              {messages.length > 0 && (
-                <>
-                  <button
-                    onClick={handleExport}
-                    className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                    title="내보내기"
-                  >
-                    <Download size={18} />
-                  </button>
-                  <button
-                    onClick={handleImport}
-                    className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                    title="가져오기"
-                  >
-                    <Upload size={18} />
-                  </button>
-                </>
-              )}
-              {isLoading && (
-                <button
-                  onClick={handleCancel}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X size={16} />
-                  취소
-                </button>
-              )}
-              <ThemeToggle />
-            </div>
-          </div>
-        </header>
+        <ChatHeader
+          messagesLength={messages.length}
+          isLoading={isLoading}
+          onExport={handleExport}
+          onImport={handleImport}
+          onCancel={handleCancel}
+        />
 
         {/* 메시지 영역 */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 bg-gray-50 dark:bg-gray-950">
+        <div className="flex-1 overflow-y-auto px-4 py-6 chat-pattern-bg pb-safe">
           <div className="max-w-4xl mx-auto space-y-6">
             {messages.length === 0 ? (
               <div className="text-center text-muted-foreground mt-20">
@@ -596,7 +566,7 @@ export default function Home() {
         </div>
 
         {/* 입력 영역 */}
-        <footer className="border-t border-border bg-white dark:bg-gray-900 px-4 py-4 shadow-lg">
+        <footer className="border-t border-border bg-white dark:bg-gray-900 px-4 py-4 shadow-lg relative z-20">
           <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
             {/* MCP 도구 토글 및 상태 표시 */}
             <div className="flex items-center justify-between mb-2">

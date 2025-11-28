@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { format, isToday, isYesterday, subDays, isAfter } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { storage, ChatSession } from '@/lib/storage';
-import { PanelLeftClose, PanelLeftOpen, Plus, Trash2, History, MessageSquare, Sparkles, Code, BookOpen, Lightbulb, HelpCircle, Zap, Database, ChevronDown, ChevronRight, Loader2, Server, Wifi, WifiOff, Settings } from 'lucide-react';
-import { loadDemoDataAsync } from '@/lib/demo-data';
+import { PanelLeftClose, PanelLeftOpen, Plus, Trash2, History, MessageSquare, Sparkles, Code, BookOpen, Lightbulb, HelpCircle, Zap, ChevronDown, ChevronRight, Loader2, Server, Wifi, WifiOff, Settings, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useMCP, getStoredServers } from '@/lib/mcp-context';
 import { ServerConfig } from '@/lib/mcp-manager';
 import Link from 'next/link';
@@ -16,6 +15,9 @@ interface ChatSidebarProps {
   onNewChat: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  className?: string;
+  isMobile?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export function ChatSidebar({
@@ -24,12 +26,16 @@ export function ChatSidebar({
   onNewChat,
   isCollapsed,
   onToggleCollapse,
+  className = '',
+  isMobile = false,
+  onCloseMobile,
 }: ChatSidebarProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['오늘']));
   const [isLoading, setIsLoading] = useState(true);
   const [isMCPExpanded, setIsMCPExpanded] = useState(true);
   const [storedServers, setStoredServers] = useState<ServerConfig[]>([]);
+  const [serverEnabledStates, setServerEnabledStates] = useState<Map<string, boolean>>(new Map());
 
   const { connectedServers, isLoading: isMCPLoading, refresh } = useMCP();
 
@@ -38,7 +44,9 @@ export function ChatSidebar({
       const allSessions = await storage.getAllSessions();
       setSessions(allSessions.sort((a, b) => b.updatedAt - a.updatedAt));
     } catch (error) {
-      console.error('Failed to load sessions:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to load sessions:', error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -57,8 +65,33 @@ export function ChatSidebar({
       try {
         const servers = await getStoredServers();
         setStoredServers(servers);
+        
+        // 활성화 상태 로드
+        const res = await fetch('/api/mcp/servers/enabled?all=true');
+        if (res.ok) {
+          const data = await res.json();
+          const states = data.states || [];
+          const enabledMap = new Map<string, boolean>();
+          for (const state of states) {
+            enabledMap.set(state.id, state.enabled);
+          }
+          // 서버가 있지만 상태가 없는 경우 기본값으로 활성화
+          for (const server of servers) {
+            if (!enabledMap.has(server.id)) {
+              enabledMap.set(server.id, true);
+            }
+          }
+          setServerEnabledStates(enabledMap);
+        } else {
+          // 기본값: 모두 활성화
+          const enabledMap = new Map<string, boolean>();
+          for (const server of servers) {
+            enabledMap.set(server.id, true);
+          }
+          setServerEnabledStates(enabledMap);
+        }
       } catch (error) {
-        console.error('Failed to load stored servers:', error);
+        // 에러는 조용히 처리 (콘솔 에러 제거)
       }
     };
     
@@ -66,9 +99,7 @@ export function ChatSidebar({
       // 서버 목록과 연결 상태 모두 새로고침
       await loadStoredServers();
       // MCP 컨텍스트의 연결 상태도 새로고침
-      if (refresh) {
-        await refresh();
-      }
+      refresh();
     };
     
     loadStoredServers();
@@ -91,6 +122,38 @@ export function ChatSidebar({
       clearInterval(interval);
     };
   }, [refresh]);
+  
+  // 서버 활성화/비활성화 토글
+  const handleToggleEnabled = async (serverId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentEnabled = serverEnabledStates.get(serverId) ?? true;
+    const newEnabled = !currentEnabled;
+    
+    try {
+      const res = await fetch('/api/mcp/servers/enabled', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId, enabled: newEnabled }),
+      });
+      
+      if (res.ok) {
+        setServerEnabledStates((prev) => {
+          const next = new Map(prev);
+          next.set(serverId, newEnabled);
+          return next;
+        });
+        // 상태 변경 이벤트 발생
+        window.dispatchEvent(new Event('mcp-status-changed'));
+      } else {
+        alert('활성화 상태 변경에 실패했습니다.');
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to toggle enabled status:', error);
+      }
+      alert('활성화 상태 변경에 실패했습니다.');
+    }
+  };
 
   // session-changed 이벤트 리스너
   useEffect(() => {
@@ -191,9 +254,9 @@ export function ChatSidebar({
 
   const groupedSessions = groupSessions(sessions);
 
-  if (isCollapsed) {
+  if (isCollapsed && !isMobile) {
     return (
-      <div className="w-12 border-r border-border bg-background flex flex-col items-center py-2">
+      <div className={`w-12 border-r border-border bg-background flex flex-col items-center py-2 ${className}`}>
         <button
           onClick={onToggleCollapse}
           className="p-2 hover:bg-muted rounded-lg transition-colors"
@@ -224,7 +287,7 @@ export function ChatSidebar({
   }
 
   return (
-    <div className="w-64 border-r border-border bg-white dark:bg-gray-900 flex flex-col h-full">
+    <div className={`w-64 border-r border-border bg-white dark:bg-gray-900 flex flex-col h-full ${className}`}>
       {/* 헤더 */}
       <div className="p-3 border-b border-border bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -233,32 +296,33 @@ export function ChatSidebar({
         </div>
         <div className="flex gap-1">
           <button
-            onClick={onNewChat}
+            onClick={() => {
+              onNewChat();
+              if (isMobile && onCloseMobile) onCloseMobile();
+            }}
             className="p-1.5 hover:bg-muted rounded transition-colors"
             title="새 채팅"
           >
             <Plus size={16} />
           </button>
-          {/* 데모 데이터 로드 버튼 */}
-          <button
-            onClick={async (e) => {
-              e.stopPropagation();
-              const count = await loadDemoDataAsync();
-              await loadSessions();
-              alert(`${count}개의 데모 채팅이 추가되었습니다.`);
-            }}
-            className="p-1.5 hover:bg-muted rounded transition-colors text-blue-500"
-            title="데모 데이터 로드 (기간별 테스트용)"
-          >
-            <Database size={16} />
-          </button>
-          <button
-            onClick={onToggleCollapse}
-            className="p-1.5 hover:bg-muted rounded transition-colors"
-            title="사이드바 접기"
-          >
-            <PanelLeftClose size={16} />
-          </button>
+          {!isMobile && (
+            <button
+              onClick={onToggleCollapse}
+              className="p-1.5 hover:bg-muted rounded transition-colors"
+              title="사이드바 접기"
+            >
+              <PanelLeftClose size={16} />
+            </button>
+          )}
+          {isMobile && onCloseMobile && (
+            <button
+              onClick={onCloseMobile}
+              className="p-1.5 hover:bg-muted rounded transition-colors"
+              title="닫기"
+            >
+              <PanelLeftClose size={16} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -302,6 +366,7 @@ export function ChatSidebar({
               <>
                 {storedServers.map((server) => {
                   const isConnected = connectedServers.some((s) => s.id === server.id);
+                  const enabled = serverEnabledStates.get(server.id) ?? true;
                   return (
                     <div
                       key={server.id}
@@ -309,41 +374,57 @@ export function ChatSidebar({
                         isConnected
                           ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800'
                           : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700'
-                      }`}
+                      } ${!enabled ? 'opacity-60' : ''}`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         {isConnected ? (
                           <Wifi size={12} className="text-green-500 flex-shrink-0" />
                         ) : (
                           <WifiOff size={12} className="text-gray-400 flex-shrink-0" />
                         )}
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="font-medium truncate" title={server.name}>
                             {server.name}
+                            {!enabled && (
+                              <span className="ml-1 text-[10px] text-muted-foreground">(비활성화)</span>
+                            )}
                           </div>
                           <div className="text-[10px] text-muted-foreground uppercase">
                             {server.transport}
                           </div>
                         </div>
                       </div>
-                      <div
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 ${
-                          isConnected
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                        }`}
-                      >
-                        {isConnected ? (
-                          <>
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                            연결됨
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                            연결 안됨
-                          </>
-                        )}
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-1 ${
+                            isConnected
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                              : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                          }`}
+                        >
+                          {isConnected ? (
+                            <>
+                              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                              연결됨
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                              연결 안됨
+                            </>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => handleToggleEnabled(server.id, e)}
+                          className={`p-1 hover:bg-muted rounded transition-colors ${
+                            enabled
+                              ? 'text-violet-600 dark:text-violet-400'
+                              : 'text-gray-400 dark:text-gray-500'
+                          }`}
+                          title={enabled ? '채팅에서 비활성화' : '채팅에서 활성화'}
+                        >
+                          {enabled ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                        </button>
                       </div>
                     </div>
                   );
@@ -413,7 +494,10 @@ export function ChatSidebar({
                     {group.sessions.map((session) => (
                       <div
                         key={session.id}
-                        onClick={() => onSelectSession(session.id)}
+                        onClick={() => {
+                      onSelectSession(session.id);
+                      if (isMobile && onCloseMobile) onCloseMobile();
+                    }}
                         className={`px-3 py-2 mx-2 rounded-lg cursor-pointer group transition-colors ${
                           currentSessionId === session.id
                             ? 'bg-primary/10 border border-primary/20'

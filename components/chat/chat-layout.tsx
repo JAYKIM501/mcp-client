@@ -3,14 +3,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChatSidebar } from './chat-sidebar';
 import { storage } from '@/lib/storage';
+import { ChatLayoutProvider, useChatLayout } from './chat-layout-context';
 
 interface ChatLayoutProps {
   children: React.ReactNode;
 }
 
-export function ChatLayout({ children }: ChatLayoutProps) {
+function ChatLayoutContent({ children }: ChatLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const { isMobileSidebarOpen, closeMobileSidebar } = useChatLayout();
 
   useEffect(() => {
     const initialize = async () => {
@@ -56,16 +58,47 @@ export function ChatLayout({ children }: ChatLayoutProps) {
 
   return (
     <div className="flex h-screen">
+      {/* 데스크탑 사이드바 */}
       <ChatSidebar
         currentSessionId={currentSessionId}
         onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
         isCollapsed={isCollapsed}
         onToggleCollapse={handleToggleCollapse}
+        className="hidden md:flex"
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
+
+      {/* 모바일 사이드바 (오버레이) */}
+      {isMobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div 
+            className="absolute inset-0 bg-black/50 transition-opacity"
+            onClick={closeMobileSidebar}
+          />
+          <ChatSidebar
+            currentSessionId={currentSessionId}
+            onSelectSession={handleSelectSession}
+            onNewChat={handleNewChat}
+            isCollapsed={false}
+            onToggleCollapse={() => {}}
+            className="relative z-10 w-[85%] max-w-[320px] h-full shadow-2xl animate-in slide-in-from-left duration-200"
+            isMobile={true}
+            onCloseMobile={closeMobileSidebar}
+          />
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col overflow-hidden relative">
         {children}
       </div>
     </div>
+  );
+}
+
+export function ChatLayout({ children }: ChatLayoutProps) {
+  return (
+    <ChatLayoutProvider>
+      <ChatLayoutContent>{children}</ChatLayoutContent>
+    </ChatLayoutProvider>
   );
 }
