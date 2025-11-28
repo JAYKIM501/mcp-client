@@ -1,5 +1,23 @@
 import { mcpManager } from './mcp-manager';
-import { ServerConfig } from './mcp-manager';
+
+// MCP 도구 타입 정의
+interface MCPTool {
+  name: string;
+  description?: string;
+  inputSchema?: {
+    type: string;
+    properties?: Record<string, {
+      type: string;
+      description?: string;
+      enum?: unknown[];
+      items?: {
+        type: string;
+      };
+      properties?: Record<string, unknown>;
+    }>;
+    required?: string[];
+  };
+}
 
 // Gemini Function Calling 형식의 도구 정의
 export interface GeminiFunction {
@@ -7,24 +25,45 @@ export interface GeminiFunction {
   description: string;
   parameters: {
     type: 'object';
-    properties: Record<string, any>;
+    properties: Record<string, {
+      type: string;
+      description?: string;
+      enum?: unknown[];
+    }>;
     required?: string[];
   };
 }
 
 // MCP 도구를 Gemini Function Calling 형식으로 변환
 export function convertMCPToolToGemini(
-  tool: any,
+  tool: MCPTool,
   serverId: string,
   serverName: string
 ): GeminiFunction {
-  const properties: Record<string, any> = {};
+  const properties: Record<string, {
+    type: string;
+    description?: string;
+    enum?: unknown[];
+    items?: {
+      type: string;
+    };
+    properties?: Record<string, unknown>;
+  }> = {};
   const required: string[] = [];
 
   // MCP 도구의 inputSchema를 Gemini 형식으로 변환
   if (tool.inputSchema?.properties) {
-    for (const [key, value] of Object.entries(tool.inputSchema.properties as Record<string, any>)) {
-      const prop: any = {
+    for (const [key, value] of Object.entries(tool.inputSchema.properties)) {
+      const prop: {
+        type: string;
+        description?: string;
+        enum?: unknown[];
+        items?: {
+          type: string;
+        };
+        properties?: Record<string, unknown>;
+      } = {
+        type: 'string', // 기본값, 아래에서 덮어씌워짐
         description: value.description || '',
       };
 
@@ -105,7 +144,8 @@ export async function getAllMCPToolsAsGemini(
       const toolsList = await mcpManager.listTools(server.id);
       if (toolsList.tools) {
         for (const tool of toolsList.tools) {
-          const geminiTool = convertMCPToolToGemini(tool, server.id, server.name);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const geminiTool = convertMCPToolToGemini(tool as any, server.id, server.name);
           tools.push(geminiTool);
         }
       }
@@ -118,9 +158,14 @@ export async function getAllMCPToolsAsGemini(
 }
 
 // Gemini Function Calling 결과를 MCP 도구 호출로 변환
+interface GeminiFunctionCall {
+  name: string;
+  args?: Record<string, unknown>;
+}
+
 export function parseGeminiFunctionCall(
-  functionCall: any
-): { serverId: string; toolName: string; args: Record<string, any> } | null {
+  functionCall: GeminiFunctionCall
+): { serverId: string; toolName: string; args: Record<string, unknown> } | null {
   const functionName = functionCall.name;
   
   // 함수 이름에서 서버 ID와 도구 이름 추출

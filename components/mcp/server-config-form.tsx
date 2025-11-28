@@ -68,7 +68,7 @@ export function ServerConfigForm({ server, onSave, onCancel }: ServerConfigFormP
         </label>
         <select
           value={transport}
-          onChange={(e) => setTransport(e.target.value as any)}
+          onChange={(e) => setTransport(e.target.value as 'stdio' | 'sse' | 'streamable-http')}
           className="w-full px-3 py-2 border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="stdio">STDIO</option>

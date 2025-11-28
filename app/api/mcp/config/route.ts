@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid server config', details: error.errors },
+        { error: 'Invalid server config', details: error.issues },
         { status: 400 }
       );
     }

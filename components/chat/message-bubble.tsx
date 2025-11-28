@@ -161,7 +161,7 @@ const MessageBubble = memo(({ role, content, images, functionCalls, functionResu
               options={{
                 overrides: {
                   code: {
-                    component: ({ className, children, ...props }: any) => {
+                    component: ({ className, children, ...props }: { className?: string; children?: React.ReactNode; [key: string]: unknown }) => {
                       const match = /language-(\w+)/.exec(className || '');
                       const isInline = !match && !String(children).includes('\n');
                       
@@ -185,7 +185,7 @@ const MessageBubble = memo(({ role, content, images, functionCalls, functionResu
                     },
                   },
                   a: {
-                    component: ({ children, ...props }: any) => (
+                    component: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => (
                       <a
                         target="_blank"
                         rel="noopener noreferrer"
@@ -197,19 +197,24 @@ const MessageBubble = memo(({ role, content, images, functionCalls, functionResu
                     ),
                   },
                   img: {
-                    component: ({ src, alt, ...props }: any) => (
-                      <ChatImage src={src} alt={alt || '이미지'} inline={true} />
-                    ),
+                    component: ({ src, alt, ...props }: { src?: string; alt?: string; [key: string]: unknown }) => {
+                      if (!src) return null;
+                      return <ChatImage src={src} alt={alt || '이미지'} inline={true} />;
+                    },
                   },
                   p: {
-                    component: ({ children, ...props }: any) => {
+                    component: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => {
                       // 이미지가 포함된 경우 div로 렌더링 (p 태그 안에 div가 들어갈 수 없음)
                       const hasImage = Children.toArray(children).some(
-                        (child: any) => {
+                        (child: unknown) => {
                           if (typeof child === 'object' && child !== null) {
-                            return child.type?.name === 'ChatImage' || 
-                                   child.props?.src || 
-                                   (child.props?.children && Children.toArray(child.props.children).some((c: any) => c?.props?.src));
+                            const childObj = child as { type?: { name?: string }; props?: { src?: string; children?: React.ReactNode } };
+                            return childObj.type?.name === 'ChatImage' || 
+                                   childObj.props?.src || 
+                                   (childObj.props?.children && Children.toArray(childObj.props.children as React.ReactNode).some((c: unknown) => {
+                                     const cObj = c as { props?: { src?: string } };
+                                     return cObj?.props?.src;
+                                   }));
                           }
                           return false;
                         }
@@ -223,7 +228,7 @@ const MessageBubble = memo(({ role, content, images, functionCalls, functionResu
                     },
                   },
                   table: {
-                    component: ({ children, ...props }: any) => (
+                    component: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => (
                       <div className="overflow-x-auto my-4">
                         <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700 border border-gray-300 dark:border-gray-700" {...props}>
                           {children}
@@ -232,28 +237,28 @@ const MessageBubble = memo(({ role, content, images, functionCalls, functionResu
                     ),
                   },
                   th: {
-                    component: ({ children, ...props }: any) => (
+                    component: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => (
                       <th className="bg-gray-100 dark:bg-gray-800 px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider border-r border-gray-300 dark:border-gray-700" {...props}>
                         {children}
                       </th>
                     ),
                   },
                   td: {
-                    component: ({ children, ...props }: any) => (
+                    component: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => (
                       <td className="px-3 py-2 whitespace-nowrap text-sm border-r border-gray-300 dark:border-gray-700" {...props}>
                         {children}
                       </td>
                     ),
                   },
                   ul: {
-                    component: ({ children, ...props }: any) => (
+                    component: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => (
                       <ul className="list-disc list-inside my-2 space-y-1" {...props}>
                         {children}
                       </ul>
                     ),
                   },
                   ol: {
-                    component: ({ children, ...props }: any) => (
+                    component: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => (
                       <ol className="list-decimal list-inside my-2 space-y-1" {...props}>
                         {children}
                       </ol>

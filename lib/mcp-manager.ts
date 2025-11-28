@@ -104,9 +104,6 @@ class MCPManager {
           }
           transport = new SSEClientTransport(new URL(config.url), {
             requestInit,
-            eventSourceInit: requestInit ? {
-              headers: requestInit.headers as Record<string, string>,
-            } : undefined,
           });
           break;
 
@@ -123,9 +120,6 @@ class MCPManager {
             console.warn('Streamable HTTP failed, falling back to SSE');
             transport = new SSEClientTransport(new URL(config.url), {
               requestInit,
-              eventSourceInit: requestInit ? {
-                headers: requestInit.headers as Record<string, string>,
-              } : undefined,
             });
           }
           break;
@@ -136,11 +130,11 @@ class MCPManager {
 
       try {
         await client.connect(transport);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('[MCP Manager] ✗ Connection failed:', {
-          error: error?.message,
-          stack: error?.stack,
-          name: error?.name,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          name: error instanceof Error ? error.name : undefined,
         });
         throw error;
       }
@@ -221,7 +215,7 @@ class MCPManager {
     return await connection.client.listTools();
   }
 
-  async callTool(serverId: string, name: string, args: Record<string, any>) {
+  async callTool(serverId: string, name: string, args: Record<string, unknown>) {
     const connection = this.connections.get(serverId);
     if (!connection || !connection.connected) {
       throw new Error(`Server ${serverId} is not connected`);
@@ -253,14 +247,15 @@ class MCPManager {
     return await connection.client.listPrompts();
   }
 
-  async getPrompt(serverId: string, name: string, args?: Record<string, any>) {
+  async getPrompt(serverId: string, name: string, args?: Record<string, unknown>) {
     const connection = this.connections.get(serverId);
     if (!connection || !connection.connected) {
       throw new Error(`Server ${serverId} is not connected`);
     }
     return await connection.client.getPrompt({
       name,
-      arguments: args || {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      arguments: (args || {}) as any,
     });
   }
 }

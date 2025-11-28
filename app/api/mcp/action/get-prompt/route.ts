@@ -15,9 +15,10 @@ export async function POST(request: NextRequest) {
 
     const result = await mcpManager.getPrompt(serverId, name, args || {});
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get prompt';
     return NextResponse.json(
-      { error: error.message || 'Failed to get prompt' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

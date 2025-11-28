@@ -7,10 +7,11 @@ export async function GET() {
   try {
     const servers = await mcpStorage.getAllServers();
     return NextResponse.json({ servers });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[MCP Servers API] Failed to get servers:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to load servers';
     return NextResponse.json(
-      { error: error.message || 'Failed to load servers' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -32,10 +33,11 @@ export async function POST(request: NextRequest) {
     const config = ServerConfigSchema.parse(body);
     await mcpStorage.saveServer(config);
     return NextResponse.json({ success: true, message: 'Server saved' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[MCP Servers API] Failed to save server:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to save server';
     return NextResponse.json(
-      { error: error.message || 'Failed to save server' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -56,10 +58,11 @@ export async function DELETE(request: NextRequest) {
 
     await mcpStorage.deleteServer(id);
     return NextResponse.json({ success: true, message: 'Server deleted' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[MCP Servers API] Failed to delete server:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete server';
     return NextResponse.json(
-      { error: error.message || 'Failed to delete server' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

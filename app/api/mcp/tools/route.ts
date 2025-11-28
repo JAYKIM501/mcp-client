@@ -16,9 +16,10 @@ export async function GET(request: NextRequest) {
 
     const result = await mcpManager.listTools(serverId);
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to list tools';
     return NextResponse.json(
-      { error: error.message || 'Failed to list tools' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

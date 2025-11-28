@@ -24,10 +24,11 @@ export async function GET(request: NextRequest) {
       const servers = await mcpStorage.getEnabledServers();
       return NextResponse.json({ servers });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[MCP Servers Enabled API] Failed to get enabled servers:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to load enabled servers';
     return NextResponse.json(
-      { error: error.message || 'Failed to load enabled servers' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -47,10 +48,11 @@ export async function POST(request: NextRequest) {
 
     await mcpStorage.setServerEnabled(serverId, enabled);
     return NextResponse.json({ success: true, message: 'Server enabled status updated' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[MCP Servers Enabled API] Failed to update enabled status:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update enabled status';
     return NextResponse.json(
-      { error: error.message || 'Failed to update enabled status' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

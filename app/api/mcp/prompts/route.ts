@@ -16,9 +16,10 @@ export async function GET(request: NextRequest) {
 
     const result = await mcpManager.listPrompts(serverId);
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to list prompts';
     return NextResponse.json(
-      { error: error.message || 'Failed to list prompts' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

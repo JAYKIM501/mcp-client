@@ -16,9 +16,10 @@ export async function GET(request: NextRequest) {
 
     const result = await mcpManager.listResources(serverId);
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to list resources';
     return NextResponse.json(
-      { error: error.message || 'Failed to list resources' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

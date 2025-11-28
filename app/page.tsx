@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import { ChatLayout } from '@/components/chat/chat-layout';
-import { storage, Message } from '@/lib/storage';
+import { storage, Message, FunctionResult } from '@/lib/storage';
 import {
   needsMigration,
   migrateLocalStorageToSupabase,
@@ -232,8 +232,12 @@ export default function Home() {
 
       let buffer = '';
       let fullContent = '';
-      const functionCalls: any[] = [];
-      const functionResults: any[] = [];
+      interface FunctionCall {
+        name: string;
+        args: Record<string, unknown>;
+      }
+      const functionCalls: FunctionCall[] = [];
+      const functionResults: FunctionResult[] = [];
 
       while (true) {
         const { done, value } = await reader.read();

@@ -1,6 +1,6 @@
 import { GoogleGenAI, ApiError, Type } from '@google/genai';
 import { NextRequest } from 'next/server';
-import { mcpManager, ServerConfig } from '@/lib/mcp-manager';
+import { mcpManager } from '@/lib/mcp-manager';
 import { mcpStorage } from '@/lib/mcp-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Buffer } from 'buffer';
@@ -67,9 +67,30 @@ function simpleHash(str: string): string {
   return Math.abs(hash).toString(16);
 }
 
+// MCP 도구 타입 정의
+interface MCPTool {
+  name: string;
+  description?: string;
+  inputSchema?: {
+    type: string;
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+}
+
+// Gemini Function Declaration 타입 정의
+interface GeminiFunctionDeclaration {
+  name: string;
+  description: string;
+  parameters: {
+    type: string;
+    properties?: Record<string, unknown>;
+  };
+}
+
 // MCP 도구를 Gemini Function Declaration 형식으로 변환
-function convertMCPToolToGemini(tool: any, serverId: string, serverIdMap: Map<string, string>) {
-  const safeServerId = sanitizeName(serverId);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertMCPToolToGemini(tool: any, serverId: string, serverIdMap: Map<string, string>): any {
   const safeToolName = sanitizeName(tool.name);
   
   // 고유 ID 생성 (길이 제한 고려)
@@ -138,8 +159,9 @@ export async function POST(request: NextRequest) {
     const ai = new GoogleGenAI({ apiKey });
 
     // 활성화된 서버의 MCP 도구 가져오기
+    // Gemini API의 타입에 맞춰 any 사용 (라이브러리 타입과 호환)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const functionDeclarations: any[] = [];
-    const serverToolMap = new Map<string, ServerConfig>();
     const serverIdMap = new Map<string, string>(); // 안전한 ID -> 원래 ID 매핑
     
     if (useMCPTools) {
@@ -152,8 +174,10 @@ export async function POST(request: NextRequest) {
           try {
             const toolsResult = await mcpManager.listTools(server.id);
             if (toolsResult.tools && toolsResult.tools.length > 0) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               for (const tool of toolsResult.tools) {
-                const geminiTool = convertMCPToolToGemini(tool, server.id, serverIdMap);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const geminiTool = convertMCPToolToGemini(tool as any, server.id, serverIdMap);
                 functionDeclarations.push(geminiTool);
                 // serverToolMap.set(geminiTool.name, server); // 필요하다면 사용
               }
@@ -166,6 +190,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 채팅 히스토리 구성
+    // Gemini API의 타입에 맞춰 any 사용 (라이브러리 타입과 호환)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contents: any[] = [];
     
     if (history) {
@@ -197,8 +223,9 @@ export async function POST(request: NextRequest) {
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
-            let currentContents = [...contents];
-            let maxIterations = 5; // 무한 루프 방지
+            const maxIterations = 5; // 무한 루프 방지
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const currentContents: any[] = [...contents];
             let iteration = 0;
             
             while (iteration < maxIterations) {
@@ -231,7 +258,7 @@ export async function POST(request: NextRequest) {
                   controller.enqueue(encoder.encode(`data: ${funcCallData}\n\n`));
 
                   // MCP 도구 실행
-                  let toolResult: any;
+                  let toolResult: unknown;
                   try {
                     if (parsed) {
                       toolResult = await mcpManager.callTool(
@@ -241,10 +268,13 @@ export async function POST(request: NextRequest) {
                       );
 
                       // 결과에서 이미지 추출 및 업로드 (Supabase Storage)
-                      if (toolResult && !toolResult.isError && toolResult.content) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const result = toolResult as any;
+                      if (result && !result.isError && result.content) {
                         // content가 배열인 경우 순회
-                        if (Array.isArray(toolResult.content)) {
-                          for (const item of toolResult.content) {
+                        if (Array.isArray(result.content)) {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          for (const item of result.content) {
                             if (item.type === 'image' && item.data) {
                               const mimeType = item.mimeType || 'image/png';
                               const url = await uploadImageToSupabase(item.data, mimeType);
@@ -389,7 +419,6 @@ export async function POST(request: NextRequest) {
         JSON.stringify({ 
           error: error.message,
           status: error.status,
-          details: error.details 
         }),
         { 
           status: error.status || 500, 

@@ -7,17 +7,36 @@ import { CodeBlock } from '@/components/ui/code-block';
 import { ImageViewer } from '@/components/ui/image-viewer';
 
 // 결과에서 이미지 추출
-function extractImagesFromResult(response: any): { images: string[]; otherContent: any } {
-  const images: string[] = [];
-  let otherContent: any = response;
+interface MCPContentItem {
+  type: string;
+  data?: string;
+  text?: string;
+  mimeType?: string;
+  resource?: {
+    blob?: string;
+    mimeType?: string;
+  };
+}
 
-  if (!response) return { images, otherContent };
+interface MCPResponse {
+  content?: MCPContentItem[];
+  isError?: boolean;
+  [key: string]: unknown;
+}
+
+function extractImagesFromResult(response: unknown): { images: string[]; otherContent: unknown } {
+  const images: string[] = [];
+  let otherContent: unknown = response;
+
+  if (!response || typeof response !== 'object') return { images, otherContent };
+
+  const mcpResponse = response as MCPResponse;
 
   // MCP 응답 형식: { content: [{ type: 'image', data: '...', mimeType: '...' }] }
-  if (response.content && Array.isArray(response.content)) {
-    const nonImageContent: any[] = [];
+  if (mcpResponse.content && Array.isArray(mcpResponse.content)) {
+    const nonImageContent: MCPContentItem[] = [];
     
-    for (const item of response.content) {
+    for (const item of mcpResponse.content) {
       if (item.type === 'image' && item.data) {
         // URL 형식인지 확인
         if (item.data.startsWith('http') || item.data.startsWith('/')) {
@@ -36,9 +55,13 @@ function extractImagesFromResult(response: any): { images: string[]; otherConten
         images.push(`data:${mimeType};base64,${item.resource.blob}`);
       } else if (item.type === 'text' && item.text) {
         // URL 형식 이미지 감지
-        const urlMatch = item.text.match(/https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp|svg)/gi);
-        if (urlMatch) {
-          images.push(...urlMatch);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const textValue: any = item.text;
+        if (typeof textValue === 'string') {
+          const urlMatch = textValue.match(/https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp|svg)/gi);
+          if (urlMatch) {
+            images.push(...urlMatch);
+          }
         }
         nonImageContent.push(item);
       } else {
@@ -55,7 +78,7 @@ function extractImagesFromResult(response: any): { images: string[]; otherConten
 
   // 직접 URL 형식
   if (typeof response === 'string') {
-    const urlMatch = response.match(/https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp|svg)/gi);
+    const urlMatch = (response as string).match(/https?:\/\/[^\s]+\.(png|jpg|jpeg|gif|webp|svg)/gi);
     if (urlMatch) {
       images.push(...urlMatch);
       otherContent = null;
@@ -63,14 +86,18 @@ function extractImagesFromResult(response: any): { images: string[]; otherConten
   }
 
   // imageUrl 필드
-  if (response.imageUrl) {
-    images.push(response.imageUrl);
-  }
-  if (response.image_url) {
-    images.push(response.image_url);
-  }
-  if (response.url && /\.(png|jpg|jpeg|gif|webp|svg)/i.test(response.url)) {
-    images.push(response.url);
+  if (typeof response === 'object' && response !== null) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const responseObj = response as any;
+    if (responseObj.imageUrl && typeof responseObj.imageUrl === 'string') {
+      images.push(responseObj.imageUrl);
+    }
+    if (responseObj.image_url && typeof responseObj.image_url === 'string') {
+      images.push(responseObj.image_url);
+    }
+    if (responseObj.url && typeof responseObj.url === 'string' && /\.(png|jpg|jpeg|gif|webp|svg)/i.test(responseObj.url)) {
+      images.push(responseObj.url);
+    }
   }
 
   return { images, otherContent };

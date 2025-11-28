@@ -44,8 +44,8 @@ export interface DbMessage {
   session_id: string;
   role: 'user' | 'assistant';
   content: string;
-  images?: any; // JSONB
-  function_calls?: any; // JSONB
-  function_results?: any; // JSONB
+  images?: unknown; // JSONB
+  function_calls?: unknown; // JSONB
+  function_results?: unknown; // JSONB
 }
 

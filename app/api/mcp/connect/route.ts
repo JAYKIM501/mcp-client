@@ -22,9 +22,9 @@ export async function POST(request: NextRequest) {
     await mcpManager.connect(config);
 
     return NextResponse.json({ success: true, message: 'Connected' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     // "already connected" 에러는 성공으로 처리
-    if (error.message?.includes('already connected')) {
+    if (error instanceof Error && error.message?.includes('already connected')) {
       return NextResponse.json({ 
         success: true, 
         message: 'Already connected',
@@ -33,8 +33,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.error('[MCP Connect] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to connect';
     return NextResponse.json(
-      { error: error.message || 'Failed to connect' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

@@ -15,9 +15,10 @@ export async function POST(request: NextRequest) {
 
     const result = await mcpManager.callTool(serverId, toolName, args || {});
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to call tool';
     return NextResponse.json(
-      { error: error.message || 'Failed to call tool' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

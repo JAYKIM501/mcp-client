@@ -16,9 +16,10 @@ export async function POST(request: NextRequest) {
     await mcpManager.disconnect(serverId);
 
     return NextResponse.json({ success: true, message: 'Disconnected' });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to disconnect';
     return NextResponse.json(
-      { error: error.message || 'Failed to disconnect' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

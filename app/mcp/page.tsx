@@ -39,8 +39,11 @@ export default function MCPPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingServer, setEditingServer] = useState<ServerConfig | undefined>();
   const [selectedServer, setSelectedServer] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tools, setTools] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [resources, setResources] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [prompts, setPrompts] = useState<any[]>([]);
   const [loadingCapabilities, setLoadingCapabilities] = useState(false);
 
@@ -528,7 +531,7 @@ export default function MCPPage() {
                             <p>사용 가능한 도구가 없습니다</p>
                           </div>
                         ) : (
-                          tools.map((tool: any) => (
+                          tools.map((tool) => (
                             <div key={tool.name}>
                               {executingTool === tool.name ? (
                                 <ToolExecutor
@@ -593,7 +596,7 @@ export default function MCPPage() {
                             <p>사용 가능한 리소스가 없습니다</p>
                           </div>
                         ) : (
-                          resources.map((resource: any) => (
+                          resources.map((resource) => (
                             <div key={resource.uri}>
                               {readingResource === resource.uri ? (
                                 <ResourceReader
@@ -661,7 +664,7 @@ export default function MCPPage() {
                             <p>사용 가능한 프롬프트가 없습니다</p>
                           </div>
                         ) : (
-                          prompts.map((prompt: any) => (
+                          prompts.map((prompt) => (
                             <div key={prompt.name}>
                               {executingPrompt === prompt.name ? (
                                 <PromptExecutor

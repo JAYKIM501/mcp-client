@@ -2,12 +2,12 @@ import { supabase, DbChatSession, DbMessage } from './supabase';
 
 export interface FunctionCall {
   name: string;
-  args: Record<string, any>;
+  args: Record<string, unknown>;
 }
 
 export interface FunctionResult {
   name: string;
-  response: any;
+  response: unknown;
   error?: string;
 }
 
@@ -50,9 +50,12 @@ function toAppSession(
       id: m.id,
       role: m.role,
       content: m.content,
-      images: m.images,
-      functionCalls: m.function_calls,
-      functionResults: m.function_results,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      images: m.images as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      functionCalls: m.function_calls as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      functionResults: m.function_results as any,
     })),
   };
 }
@@ -427,7 +430,12 @@ export const storage = {
     updates: Partial<Pick<Message, 'content' | 'images' | 'functionCalls' | 'functionResults'>>
   ): Promise<void> {
     try {
-      const dbUpdates: any = {};
+      const dbUpdates: Partial<{
+        content: string;
+        images: unknown;
+        function_calls: unknown;
+        function_results: unknown;
+      }> = {};
       if (updates.content !== undefined) dbUpdates.content = updates.content;
       if (updates.images !== undefined) dbUpdates.images = updates.images;
       if (updates.functionCalls !== undefined) dbUpdates.function_calls = updates.functionCalls;
