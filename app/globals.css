@@ -133,9 +133,9 @@
   }
   
   .dark .chat-pattern-bg {
-    background-color: oklch(0.08 0 0);
+    background-color: oklch(0.12 0 0);
     background-image: 
-      radial-gradient(circle, oklch(0.11 0 0) 0.5px, transparent 0.5px);
+      radial-gradient(circle, oklch(0.15 0 0) 0.5px, transparent 0.5px);
     background-size: 32px 32px;
   }
   
